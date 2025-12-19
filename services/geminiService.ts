@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AIModel } from '../types';
-import { SYSTEM_INSTRUCTIONS } from '../constants';
+import { SYSTEM_INSTRUCTIONS, SHENG_DICTIONARY } from '../constants';
 
 export class GeminiService {
   private ai: GoogleGenAI;
@@ -10,37 +10,18 @@ export class GeminiService {
     this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   }
 
-  async generateResponse(
-    model: AIModel,
-    prompt: string,
-    context?: string,
-    systemPrompt: string = SYSTEM_INSTRUCTIONS.GENERAL
-  ): Promise<string> {
-    const fullPrompt = context 
-      ? `CONTEXT FROM PAGE:\n${context}\n\nUSER PROMPT:\n${prompt}`
-      : prompt;
+  private injectLexicalHints(prompt: string): string {
+    const detectedSlang: string[] = [];
+    const lowerPrompt = prompt.toLowerCase();
 
-    const config: any = {
-      systemInstruction: systemPrompt,
-    };
+    Object.entries(SHENG_DICTIONARY).forEach(([word, definition]) => {
+      if (lowerPrompt.includes(word.toLowerCase())) {
+        detectedSlang.push(`"${word}" (${definition})`);
+      }
+    });
 
-    // If using thinking variant, we apply thinking budget
-    if (model === AIModel.GEMINI_THINKING) {
-      config.thinkingConfig = { thinkingBudget: 16000 };
-    }
-
-    try {
-      const response: GenerateContentResponse = await this.ai.models.generateContent({
-        model: model === AIModel.GEMINI_THINKING ? AIModel.GEMINI_PRO : model,
-        contents: [{ parts: [{ text: fullPrompt }] }],
-        config: config
-      });
-
-      return response.text || "I'm sorry, I couldn't generate a response.";
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      throw error;
-    }
+    if (detectedSlang.length === 0) return "";
+    return `\n\n[LEXICAL HINTS DETECTED]: ${detectedSlang.join(", ")}`;
   }
 
   async *generateStream(
@@ -49,9 +30,11 @@ export class GeminiService {
     context?: string,
     systemPrompt: string = SYSTEM_INSTRUCTIONS.GENERAL
   ) {
+    const lexicalHints = this.injectLexicalHints(prompt);
+    
     const fullPrompt = context 
-      ? `CONTEXT FROM PAGE:\n${context}\n\nUSER PROMPT:\n${prompt}`
-      : prompt;
+      ? `CONTEXT FROM PAGE:\n${context}\n\nUSER PROMPT:\n${prompt}${lexicalHints}`
+      : `${prompt}${lexicalHints}`;
 
     const config: any = {
       systemInstruction: systemPrompt,
@@ -73,7 +56,7 @@ export class GeminiService {
       }
     } catch (error) {
       console.error("Gemini Stream Error:", error);
-      yield "Error generating response.";
+      yield "Error generating response. Check your API key or connection.";
     }
   }
 }

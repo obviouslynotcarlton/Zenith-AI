@@ -1,0 +1,8 @@
+{
+  "name": "Zenith AI Sidebar",
+  "description": "A private, high-performance multi-model AI orchestrator designed as a universal sidebar for seamless context-aware browsing and productivity.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
